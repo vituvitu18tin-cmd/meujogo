@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
 <meta charset="UTF-8">
-<title>Arena Survival PRO Mobile</title>
+<title>Arena Survival PRO</title>
 
 <style>
 body {
@@ -110,7 +110,6 @@ const player = {
     radius: 15,
     speed: 5,
     hp: 100,
-    weapon: 'normal',
     dashCooldown: 0
 };
 
@@ -137,9 +136,7 @@ joystick.addEventListener('touchend', () => {
 });
 
 /* TIRO MOBILE */
-shootBtn.addEventListener('touchstart', mobileShoot);
-
-function mobileShoot() {
+shootBtn.addEventListener('touchstart', () => {
     const target = enemies[0];
     if (!target) return;
 
@@ -152,7 +149,7 @@ function mobileShoot() {
         vy: Math.sin(angle)*10,
         radius: 4
     });
-}
+});
 
 /* TIRO PC */
 function shoot(e) {
@@ -167,7 +164,7 @@ function shoot(e) {
     });
 }
 
-/* SPAWN INIMIGO */
+/* SPAWN INIMIGOS */
 function spawnEnemy() {
     let type = Math.random();
 
@@ -210,7 +207,7 @@ function update() {
     if (keys['KeyA']) player.x -= player.speed;
     if (keys['KeyD']) player.x += player.speed;
 
-    // touch
+    // mobile
     player.x += touchX * player.speed;
     player.y += touchY * player.speed;
 
@@ -277,7 +274,6 @@ function update() {
                     if (xp >= level*20) {
                         xp = 0;
                         level++;
-                        player.weapon = 'spread';
                     }
                 }
 
@@ -337,5 +333,6 @@ draw();
 </script>
 
 <script src="conquistas.js"></script>
+
 </body>
 </html>
