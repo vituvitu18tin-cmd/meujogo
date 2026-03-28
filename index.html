@@ -1,0 +1,305 @@
+ <!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Arena Survival PRO</title>
+
+<style>
+body {
+    margin: 0;
+    overflow: hidden;
+    background: #1a1a1a;
+    font-family: Arial;
+}
+
+#ui {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    color: white;
+}
+
+.stat {
+    font-size: 20px;
+}
+
+#hp-bar-container {
+    width: 200px;
+    height: 10px;
+    background: #444;
+}
+
+#hp-bar {
+    height: 100%;
+    background: red;
+}
+</style>
+</head>
+
+<body>
+
+<div id="ui">
+    <div class="stat">Score: <span id="score">0</span></div>
+    <div class="stat">Level: <span id="level">1</span></div>
+    <div class="stat">XP: <span id="xp">0</span></div>
+    <div id="hp-bar-container"><div id="hp-bar"></div></div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const scoreEl = document.getElementById('score');
+const levelEl = document.getElementById('level');
+const xpEl = document.getElementById('xp');
+const hpBar = document.getElementById('hp-bar');
+
+canvas.width = innerWidth;
+canvas.height = innerHeight;
+
+let score = 0;
+let xp = 0;
+let level = 1;
+let tempoVivo = 0;
+let gameActive = true;
+
+const player = {
+    x: canvas.width/2,
+    y: canvas.height/2,
+    radius: 15,
+    speed: 5,
+    hp: 100,
+    weapon: 'normal',
+    dashCooldown: 0
+};
+
+const enemies = [];
+const projectiles = [];
+const particles = [];
+const keys = {};
+
+window.addEventListener('keydown', e => keys[e.code] = true);
+window.addEventListener('keyup', e => keys[e.code] = false);
+window.addEventListener('mousedown', shoot);
+
+// ===== TIRO =====
+function shoot(e) {
+    if (!gameActive) return;
+
+    const angle = Math.atan2(e.clientY - player.y, e.clientX - player.x);
+
+    if (player.weapon === 'normal') {
+        projectiles.push({
+            x: player.x,
+            y: player.y,
+            vx: Math.cos(angle)*12,
+            vy: Math.sin(angle)*12,
+            radius: 4
+        });
+    }
+
+    if (player.weapon === 'spread') {
+        for (let i=-1;i<=1;i++) {
+            let a = angle + i*0.2;
+            projectiles.push({
+                x: player.x,
+                y: player.y,
+                vx: Math.cos(a)*10,
+                vy: Math.sin(a)*10,
+                radius: 4
+            });
+        }
+    }
+}
+
+// ===== INIMIGOS =====
+function spawnEnemy() {
+    if (!gameActive) return;
+
+    let r = Math.random();
+    let type;
+
+    if (r < 0.6) type = 'normal';
+    else if (r < 0.85) type = 'tank';
+    else type = 'shooter';
+
+    let enemy = {
+        x: Math.random()*canvas.width,
+        y: Math.random()*canvas.height,
+        type
+    };
+
+    if (type === 'normal') {
+        enemy.radius = 15;
+        enemy.hp = 1;
+        enemy.speed = 2;
+        enemy.color = 'red';
+    }
+
+    if (type === 'tank') {
+        enemy.radius = 25;
+        enemy.hp = 5;
+        enemy.speed = 1;
+        enemy.color = 'purple';
+    }
+
+    if (type === 'shooter') {
+        enemy.radius = 18;
+        enemy.hp = 2;
+        enemy.speed = 1.5;
+        enemy.color = 'blue';
+        enemy.cooldown = 0;
+    }
+
+    enemies.push(enemy);
+
+    setTimeout(spawnEnemy, Math.max(300, 1000 - score));
+}
+
+// ===== UPDATE =====
+function update() {
+
+    // movimento
+    if (keys['KeyW']) player.y -= player.speed;
+    if (keys['KeyS']) player.y += player.speed;
+    if (keys['KeyA']) player.x -= player.speed;
+    if (keys['KeyD']) player.x += player.speed;
+
+    // DASH
+    if (keys['ShiftLeft'] && player.dashCooldown <= 0) {
+        player.x += (keys['KeyD'] - keys['KeyA']) * 100;
+        player.y += (keys['KeyS'] - keys['KeyW']) * 100;
+        player.dashCooldown = 60;
+    }
+
+    if (player.dashCooldown > 0) player.dashCooldown--;
+
+    // projéteis
+    projectiles.forEach((p, pi) => {
+        p.x += p.vx;
+        p.y += p.vy;
+
+        if (p.x < 0 || p.y < 0 || p.x > canvas.width || p.y > canvas.height)
+            projectiles.splice(pi,1);
+    });
+
+    // inimigos
+    enemies.forEach((en, ei) => {
+
+        let angle = Math.atan2(player.y-en.y, player.x-en.x);
+        en.x += Math.cos(angle)*en.speed;
+        en.y += Math.sin(angle)*en.speed;
+
+        // shooter atira
+        if (en.type === 'shooter') {
+            en.cooldown--;
+
+            if (en.cooldown <= 0) {
+                projectiles.push({
+                    x: en.x,
+                    y: en.y,
+                    vx: Math.cos(angle)*6,
+                    vy: Math.sin(angle)*6,
+                    radius: 4,
+                    enemy: true
+                });
+
+                en.cooldown = 120;
+            }
+        }
+
+        // colisão bala
+        projectiles.forEach((p, pi) => {
+
+            if (p.enemy) {
+                let d = Math.hypot(p.x-player.x, p.y-player.y);
+                if (d < p.radius + player.radius) {
+                    player.hp -= 5;
+                    projectiles.splice(pi,1);
+                }
+                return;
+            }
+
+            let d = Math.hypot(p.x-en.x, p.y-en.y);
+
+            if (d < p.radius + en.radius) {
+                en.hp--;
+
+                if (en.hp <= 0) {
+                    enemies.splice(ei,1);
+                    score += 10;
+                    xp += 5;
+
+                    if (xp >= level*20) {
+                        xp = 0;
+                        level++;
+                        player.weapon = 'spread';
+                    }
+                }
+
+                projectiles.splice(pi,1);
+            }
+        });
+
+        // colisão player
+        let d = Math.hypot(player.x-en.x, player.y-en.y);
+        if (d < player.radius + en.radius) {
+            player.hp -= 0.5;
+        }
+    });
+
+    // UI
+    scoreEl.innerText = score;
+    levelEl.innerText = level;
+    xpEl.innerText = xp;
+    hpBar.style.width = player.hp + '%';
+
+    if (player.hp <= 0) {
+        alert("GAME OVER\nScore: "+score);
+        location.reload();
+    }
+}
+
+// ===== DRAW =====
+function draw() {
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // player
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.radius, 0, Math.PI*2);
+    ctx.fillStyle = "lime";
+    ctx.fill();
+
+    // inimigos
+    enemies.forEach(en => {
+        ctx.beginPath();
+        ctx.arc(en.x, en.y, en.radius, 0, Math.PI*2);
+        ctx.fillStyle = en.color;
+        ctx.fill();
+    });
+
+    // projéteis
+    projectiles.forEach(p => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2);
+        ctx.fillStyle = p.enemy ? "orange" : "yellow";
+        ctx.fill();
+    });
+
+    update();
+    requestAnimationFrame(draw);
+}
+
+// tempo vivo
+setInterval(() => tempoVivo++, 1000);
+
+spawnEnemy();
+draw();
+</script>
+
+<script src="conquistas.js"></script>
+</body>
+</html>
