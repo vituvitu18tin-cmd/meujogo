@@ -1,4 +1,4 @@
- const canvas = document.getElementById('gameCanvas');
+  const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 const scoreEl = document.getElementById('score');
@@ -12,10 +12,12 @@ const shootBtn = document.getElementById('shootBtn');
 canvas.width = innerWidth;
 canvas.height = innerHeight;
 
+/* ===== IMPEDIR ZOOM/SCROLL NO MOBILE ===== */
+document.body.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+
 let score = 0;
 let xp = 0;
 let level = 1;
-let tempoVivo = 0;
 
 let touchX = 0;
 let touchY = 0;
@@ -26,7 +28,6 @@ const player = {
     radius: 15,
     speed: 5,
     hp: 100,
-    weapon: 'normal',
     dashCooldown: 0
 };
 
@@ -34,18 +35,19 @@ const enemies = [];
 const projectiles = [];
 const keys = {};
 
+/* ===== CONTROLES PC ===== */
 window.addEventListener('keydown', e => keys[e.code] = true);
 window.addEventListener('keyup', e => keys[e.code] = false);
 window.addEventListener('mousedown', shoot);
 
-/* ================= JOYSTICK ================= */
+/* ===== JOYSTICK ===== */
 if (joystick) {
     joystick.addEventListener('touchmove', e => {
         const t = e.touches[0];
         const rect = joystick.getBoundingClientRect();
 
-        touchX = (t.clientX - (rect.left + rect.width/2)) / 50;
-        touchY = (t.clientY - (rect.top + rect.height/2)) / 50;
+        touchX = (t.clientX - (rect.left + rect.width/2)) / 40;
+        touchY = (t.clientY - (rect.top + rect.height/2)) / 40;
     });
 
     joystick.addEventListener('touchend', () => {
@@ -54,40 +56,50 @@ if (joystick) {
     });
 }
 
-/* ================= TIRO MOBILE ================= */
+/* ===== TIRO MOBILE MELHORADO ===== */
 if (shootBtn) {
-    shootBtn.addEventListener('touchstart', mobileShoot);
-}
+    shootBtn.addEventListener('touchstart', () => {
+        const target = getNearestEnemy();
+        if (!target) return;
 
-function mobileShoot() {
-    const target = enemies[0];
-    if (!target) return;
-
-    const angle = Math.atan2(target.y - player.y, target.x - player.x);
-
-    projectiles.push({
-        x: player.x,
-        y: player.y,
-        vx: Math.cos(angle)*10,
-        vy: Math.sin(angle)*10,
-        radius: 4
+        shootAt(target.x, target.y, 10);
     });
 }
 
-/* ================= TIRO PC ================= */
+/* ===== FUNÇÃO DE TIRO ===== */
 function shoot(e) {
-    const angle = Math.atan2(e.clientY - player.y, e.clientX - player.x);
+    shootAt(e.clientX, e.clientY, 12);
+}
+
+function shootAt(tx, ty, speed) {
+    const angle = Math.atan2(ty - player.y, tx - player.x);
 
     projectiles.push({
         x: player.x,
         y: player.y,
-        vx: Math.cos(angle)*12,
-        vy: Math.sin(angle)*12,
+        vx: Math.cos(angle)*speed,
+        vy: Math.sin(angle)*speed,
         radius: 4
     });
 }
 
-/* ================= SPAWN INIMIGOS ================= */
+/* ===== INIMIGO MAIS PRÓXIMO ===== */
+function getNearestEnemy() {
+    let nearest = null;
+    let minDist = Infinity;
+
+    enemies.forEach(en => {
+        let d = Math.hypot(player.x - en.x, player.y - en.y);
+        if (d < minDist) {
+            minDist = d;
+            nearest = en;
+        }
+    });
+
+    return nearest;
+}
+
+/* ===== SPAWN ===== */
 function spawnEnemy() {
     let type = Math.random();
 
@@ -97,31 +109,18 @@ function spawnEnemy() {
     };
 
     if (type < 0.6) {
-        enemy.radius = 15;
-        enemy.hp = 1;
-        enemy.speed = 2;
-        enemy.color = 'red';
-        enemy.type = 'normal';
+        Object.assign(enemy, { radius: 15, hp: 1, speed: 2, color: 'red', type: 'normal' });
     } else if (type < 0.85) {
-        enemy.radius = 25;
-        enemy.hp = 5;
-        enemy.speed = 1;
-        enemy.color = 'purple';
-        enemy.type = 'tank';
+        Object.assign(enemy, { radius: 25, hp: 5, speed: 1, color: 'purple', type: 'tank' });
     } else {
-        enemy.radius = 18;
-        enemy.hp = 2;
-        enemy.speed = 1.5;
-        enemy.color = 'blue';
-        enemy.type = 'shooter';
-        enemy.cooldown = 0;
+        Object.assign(enemy, { radius: 18, hp: 2, speed: 1.5, color: 'blue', type: 'shooter', cooldown: 0 });
     }
 
     enemies.push(enemy);
     setTimeout(spawnEnemy, Math.max(300, 1000 - score));
 }
 
-/* ================= UPDATE ================= */
+/* ===== UPDATE ===== */
 function update() {
 
     // teclado
@@ -130,14 +129,18 @@ function update() {
     if (keys['KeyA']) player.x -= player.speed;
     if (keys['KeyD']) player.x += player.speed;
 
-    // mobile (JOYSTICK)
+    // mobile
     player.x += touchX * player.speed;
     player.y += touchY * player.speed;
 
+    /* ===== LIMITAR TELA ===== */
+    player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
+    player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
+
     // dash
     if (keys['ShiftLeft'] && player.dashCooldown <= 0) {
-        player.x += (keys['KeyD'] - keys['KeyA']) * 100;
-        player.y += (keys['KeyS'] - keys['KeyW']) * 100;
+        player.x += (keys['KeyD'] - keys['KeyA']) * 80;
+        player.y += (keys['KeyS'] - keys['KeyW']) * 80;
         player.dashCooldown = 60;
     }
     if (player.dashCooldown > 0) player.dashCooldown--;
@@ -158,23 +161,15 @@ function update() {
         en.x += Math.cos(angle)*en.speed;
         en.y += Math.sin(angle)*en.speed;
 
-        // inimigo que atira
+        // shooter
         if (en.type === 'shooter') {
             en.cooldown--;
             if (en.cooldown <= 0) {
-                projectiles.push({
-                    x: en.x,
-                    y: en.y,
-                    vx: Math.cos(angle)*6,
-                    vy: Math.sin(angle)*6,
-                    radius: 4,
-                    enemy: true
-                });
+                shootAt(player.x, player.y, 6);
                 en.cooldown = 120;
             }
         }
 
-        // colisões
         projectiles.forEach((p, pi) => {
 
             if (p.enemy) {
@@ -199,7 +194,6 @@ function update() {
                     if (xp >= level*20) {
                         xp = 0;
                         level++;
-                        player.weapon = 'spread';
                     }
                 }
 
@@ -225,7 +219,7 @@ function update() {
     }
 }
 
-/* ================= DRAW ================= */
+/* ===== DRAW ===== */
 function draw() {
     ctx.fillStyle = "rgba(0,0,0,0.3)";
     ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -245,7 +239,7 @@ function draw() {
     projectiles.forEach(p => {
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2);
-        ctx.fillStyle = p.enemy ? "orange" : "yellow";
+        ctx.fillStyle = "yellow";
         ctx.fill();
     });
 
@@ -253,8 +247,12 @@ function draw() {
     requestAnimationFrame(draw);
 }
 
-/* ================= START ================= */
-setInterval(() => tempoVivo++, 1000);
+/* ===== RESIZE FIX ===== */
+window.addEventListener('resize', () => {
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
+});
 
+/* START */
 spawnEnemy();
 draw();
